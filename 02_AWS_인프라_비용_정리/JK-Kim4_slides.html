@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS 인프라 정리 — 무엇을 지웠고 얼마나 줄었나</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<style>
+* { margin: 0; box-sizing: border-box; }
+html, body { height: 100%; background: #0E1626; overflow: hidden; }
+body { font: 32px/1.2 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; word-break: keep-all; overflow-wrap: break-word; }
+:root {
+  --ink: #16223A;
+  --soft: #4A5568;
+  --paper: #F6F5F0;
+  --paper2: #ECEAE2;
+  --accent: #C8561C;
+  --other: #5C7393;
+  --line: #D4D1C6;
+}
+body { font-family: 'Noto Sans KR', Arial, sans-serif; color: var(--ink); }
+section {
+  padding: 128px;
+  background: var(--paper);
+  color: var(--ink);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+section.alt { background: var(--paper2); }
+section.dark { background: var(--ink); color: var(--paper); }
+.eyebrow { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: 2px; }
+h1 { font-size: 104px; font-weight: 900; line-height: 1.15; }
+h2 { font-size: 64px; font-weight: 700; line-height: 1.2; }
+h3 { font-size: 40px; font-weight: 700; line-height: 1.3; }
+p { font-size: 32px; line-height: 1.5; }
+.muted { color: var(--soft); }
+.dark .muted { color: #C9D3E0; }
+.big { font-size: 120px; font-weight: 900; line-height: 1.05; }
+.big.acc { color: var(--accent); }
+.label { font-size: 28px; color: var(--soft); }
+.dark .label { color: #C9D3E0; }
+.head { display: flex; flex-direction: column; gap: 16px; }
+
+.row { display: flex; gap: 48px; }
+.col { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+
+.card { background: #FFFFFF; border: 2px solid var(--line); border-radius: 16px; padding: 40px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.alt .card { background: var(--paper); }
+.card.hot { border-color: var(--accent); }
+.card .num { font-size: 72px; font-weight: 900; color: var(--accent); line-height: 1.1; }
+.card .txt { font-size: 30px; line-height: 1.5; color: var(--ink); }
+.card .txt.muted { color: var(--soft); }
+
+.steps { display: flex; flex-direction: column; gap: 28px; }
+.step { display: flex; gap: 32px; align-items: flex-start; }
+.step .k { font-size: 32px; font-weight: 900; color: var(--accent); min-width: 72px; }
+.steps.wide .k { min-width: 180px; }
+.step .v { font-size: 34px; line-height: 1.45; }
+.step .v .muted { color: var(--soft); }
+
+.tl { display: grid; grid-template-columns: repeat(6, 1fr); gap: 24px; border-top: 6px solid var(--ink); padding-top: 32px; }
+.tl .item { display: flex; flex-direction: column; gap: 12px; }
+.tl .date { font-size: 36px; font-weight: 900; }
+.tl .what { font-size: 28px; line-height: 1.45; }
+.tag { font-size: 24px; font-weight: 700; padding: 4px 14px; border-radius: 8px; align-self: flex-start; color: #FFFFFF; background: var(--accent); }
+.tag.other { background: var(--other); }
+
+.bars { display: flex; flex-direction: column; gap: 26px; }
+.bar { display: flex; align-items: center; gap: 28px; }
+.bar .name { font-size: 30px; width: 520px; }
+.bar .fill { height: 56px; border-radius: 8px; background: var(--accent); }
+.bar .fill.other { background: var(--other); }
+.bar .val { font-size: 32px; font-weight: 700; white-space: nowrap; }
+.legend { display: flex; gap: 32px; align-items: center; }
+
+.quote { font-size: 52px; font-weight: 700; line-height: 1.4; }
+.note { font-size: 26px; color: var(--soft); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.in { animation: rise 500ms ease-out both; animation-delay: calc(var(--i, 0) * 120ms); }
+
+body { font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+#stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#stage > section { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; display: none; }
+#stage > section.active { display: flex; }
+section aside { display: none; }
+body.notes section.active aside { display: block; position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 128px; background: rgba(14,22,38,.92); color: #E9EDF3; font-size: 26px; line-height: 1.5; }
+#hud { position: fixed; right: 16px; bottom: 12px; padding: 4px 10px; border-radius: 6px; background: rgba(14,22,38,.72); color: #B7C1D1; font: 13px/1.4 sans-serif; user-select: none; }
+#hud b { color: #E9EDF3; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .35em .6em; text-align: left; border-bottom: 2px solid #D4D1C6; }
+th { border-bottom: 3px solid #16223A; }
+@media print {
+  @page { size: 1920px 1080px; margin: 0; }
+  html, body { overflow: visible; background: none; }
+  #stage { position: static; transform: none !important; width: auto; height: auto; }
+  #stage > section { position: relative; display: flex !important; page-break-after: always; break-after: page; }
+  .in { animation: none !important; }
+  #hud { display: none; }
+}
+</style></head>
+<body>
+<div id="stage">
+<section id="cover" class="dark" style="justify-content:center">
+<p class="eyebrow">2026. 11.</p>
+<h1>AWS 인프라 정리<br>무엇을 지웠고, 얼마나 줄었나</h1>
+<p class="muted">AI agent로 전수 조사하고, 사람이 판단한 두 달</p>
+<aside>15분 발표. 흐름: 들어가는 말 → 시작 배경 → 결론 → 골라낸 기준과 사례 → 실행 중 문제 → 비용 효과 → 남은 후보.</aside>
+</section>
+
+<section id="intro" class="alt">
+<div class="head">
+<p class="eyebrow">들어가는 말</p>
+<h2>구조 개선은 왜 늘 미뤄졌나</h2>
+</div>
+<p class="muted">구조 리팩토링 · 프레임워크 변경 · 인프라 개선</p>
+<div class="row">
+<div class="card in" style="--i:0"><h3>범위 파악</h3><p class="txt">시작점과 범위를<br>사람이 직접 찾아야 함</p></div>
+<div class="card in" style="--i:1"><h3>성과 측정</h3><p class="txt">조사에만 공수 집중<br>→ 실제 작업까지 못 감<br>→ 개선 지표 없음</p></div>
+<div class="card in" style="--i:2"><h3>프로젝트 규모</h3><p class="txt">개선 지점을 정확히 짚기 어렵고<br>규모가 크면 사실상 불가능</p></div>
+</div>
+<aside>시도조차 어려웠던 이유: 범위 파악 자체가 큰 일이었음. KPI로 이어지려면 작업이 완료되어 실질적인 개선 지표가 나와야 하는데, 조사 과정에 과도한 공수가 들어가고 실제 작업으로 이어지기도 힘들어 시간만 낭비되는 경우가 대부분이었음.</aside>
+</section>
+
+<section id="ai">
+<div class="head">
+<p class="eyebrow">들어가는 말</p>
+<h2>AI agent로 달라진 것: 전수 조사</h2>
+</div>
+<div class="row">
+<div class="card hot in" style="--i:0">
+<p class="label">AI agent</p>
+<h3>전수 조사</h3>
+<p class="txt">로그·설정·코드를 전부 읽어 작업 범위 파악</p>
+</div>
+<div class="card in" style="--i:1">
+<p class="label">사람</p>
+<h3>검토·결정</h3>
+<p class="txt">근거 확인과 삭제 승인은 반드시 사람이</p>
+</div>
+</div>
+<div class="card in" style="--i:2; flex:0 0 auto">
+<p class="label">이번 작업에서 전수로 본 것</p>
+<p class="txt">서버 11대 설정 · 로드밸런서 접근 로그 9,850만 건 · 서버리스 함수 81개 · 코드 저장소 48개</p>
+</div>
+<aside>예시: 서버 11대의 종료 방지 설정 전수 확인, 로드밸런서 접근 로그 91일치 9,850만 건 분석, 운영 서버리스 함수 81개 분류, 코드 저장소 48개에서 IaC 파일 검색. 모든 삭제는 사람이 승인한 뒤 실행.</aside>
+</section>
+
+<section id="start" class="alt">
+<div class="head">
+<p class="eyebrow">그래서, 이번 작업의 시작</p>
+<h2>9/18 요청 하나: 「안 쓰는 BI 도구 자원 제거」</h2>
+</div>
+<div class="steps">
+<div class="step in" style="--i:0"><p class="k">상황</p><p class="v">서버·DB를 바꾼 뒤 옛 BI 도구 자원을 지우지 않음<br><span class="muted">2025. 3. 서버 교체, 2026. 3. 메타 DB 교체</span></p></div>
+<div class="step in" style="--i:1"><p class="k">문제</p><p class="v">아무도 안 쓰는데 요금은 계속 나감<br><span class="muted">「적지만 돈 나가는 중」</span></p></div>
+<div class="step in" style="--i:2"><p class="k">확장</p><p class="v">안 쓰는 자원, 불필요한 요금 전반으로 범위 확장<br><span class="muted">로드밸런서 · EKS 연장 지원 · DB 로그</span></p></div>
+</div>
+<aside>BI 도구 = 사내 데이터 조회·대시보드 도구. 팀 리드의 요청 한 건에서 시작해, 같은 성격의 자원과 요금으로 범위를 넓힘.</aside>
+</section>
+
+<section id="summary">
+<div class="head">
+<p class="eyebrow">결론</p>
+<h2>월 청구액 약 30% 감소, 정리 효과는 월 약 $840</h2>
+</div>
+<div class="row">
+<div class="card in" style="--i:0">
+<p class="label">월 청구액 감소 (세금 포함)</p>
+<p class="num">약 30%</p>
+<p class="txt">8월 실제 대비<br>11월 예상</p>
+</div>
+<div class="card hot in" style="--i:1">
+<p class="label">정리 작업 효과 (세금 제외)</p>
+<p class="num">−$840</p>
+<p class="txt">연 약 $10,000 (약 1,400만 원)<br>EKS · BI 도구 · 로그 등 5건</p>
+</div>
+<div class="card in" style="--i:2">
+<p class="label">늘어난 항목 (세금 제외)</p>
+<p class="num" style="color:#5C7393">+$140</p>
+<p class="txt">인터넷 송신 · Lightsail<br>원인 미확인</p>
+</div>
+</div>
+<aside>11월 예상: 11/1~18 실적 일평균 × 30일 + 8월 세율. 정리 효과 $838 = EKS $360 + BI 도구 DB $168 + 로그 $141 + 로드밸런서 $85 + 디스크 $84 (8월과 11/2~18을 30일로 맞춘 세금 제외 값). 중간 집계 때 「8월 대비 $1,000」으로 봤던 값은 세금을 덜 넣은 값이라 $900으로 정정.</aside>
+</section>
+
+<section id="timeline">
+<div class="head">
+<p class="eyebrow">흐름</p>
+<h2>두 달 동안 한 일</h2>
+</div>
+<div class="tl">
+<div class="item in" style="--i:0"><p class="date">9/21</p><p class="tag">정리</p><p class="what">옛 BI 도구<br>DB·서버·디스크 삭제</p></div>
+<div class="item in" style="--i:1"><p class="date">9/30</p><p class="tag">정리</p><p class="what">상품 서버 개선<br>DB 로그 급감</p></div>
+<div class="item in" style="--i:2"><p class="date">10/1</p><p class="tag">정리</p><p class="what">레거시 로드밸런서<br>4개 삭제</p></div>
+<div class="item in" style="--i:3"><p class="date">10/29</p><p class="tag">정리</p><p class="what">EKS 1.36 업그레이드<br>연장 지원 요금 제거</p></div>
+<div class="item in" style="--i:4"><p class="date">11/10</p><p class="tag">정리</p><p class="what">옛 캐시 서버 종료</p></div>
+<div class="item in" style="--i:5"><p class="date">11/12</p><p class="tag">정리</p><p class="what">서버리스 함수<br>28개 삭제</p></div>
+</div>
+<p class="note">캐시 서버·서버리스 함수는 비용보다 보안·유지보수 목적</p>
+<aside>10/20에 로드밸런서 2개가 추가로 삭제됨. 캐시 서버는 서버리스 캐시로 옮긴 뒤 옛 서버 종료.</aside>
+</section>
+
+<section id="criteria" class="alt">
+<div class="head">
+<p class="eyebrow">판단 기준</p>
+<h2>삭제 전 체크리스트 4가지</h2>
+</div>
+<div class="row">
+<div class="card in" style="--i:0">
+<p class="label">1</p>
+<h3>트래픽</h3>
+<p class="txt">접속 로그·메트릭 0<br>코드·설정·DNS<br>어디서도 참조 없음</p>
+<p class="txt muted">예: BI 도구 DB<br>193일 접속 0</p>
+</div>
+<div class="card in" style="--i:1">
+<p class="label">2</p>
+<h3>관리 주체</h3>
+<p class="txt">IaC·컨트롤러가<br>관리하지 않아<br>지워도 다시 안 생김</p>
+<p class="txt muted">예: 없어진<br>옛 클러스터가 만든<br>로드밸런서</p>
+</div>
+<div class="card in" style="--i:2">
+<p class="label">3</p>
+<h3>차단 테스트</h3>
+<p class="txt">삭제 전에 먼저 막고<br>며칠 관찰<br>에러·문의 0이면 삭제</p>
+<p class="txt muted">예: 보안그룹 차단<br>2시간마다 8회 점검</p>
+</div>
+<div class="card in" style="--i:3">
+<p class="label">4</p>
+<h3>롤백 계획</h3>
+<p class="txt">설정 백업<br>구성은 git에 남아<br>되살릴 수 있음</p>
+<p class="txt muted">예: 로드밸런서<br>설정 전부 백업</p>
+</div>
+</div>
+<aside>1→4 순서대로 확인. 2번은 쿠버네티스 컨트롤러나 IaC가 관리하는 자원이면 지워도 다시 생기므로, 관리 주체가 없는지 먼저 봐야 한다는 뜻. 3번은 접속 시도 기록이 없는 환경이면 사람의 문의가 유일한 신호.</aside>
+</section>
+
+<section id="case-bi">
+<div class="head">
+<p class="eyebrow">사례 1 · 9/21</p>
+<h2>옛 BI 도구: 193일 동안 접속 0</h2>
+</div>
+<div class="row">
+<div class="col">
+<div class="steps wide">
+<div class="step in" style="--i:0"><p class="k">트래픽</p><p class="v">이관 뒤 193일 접속 0<br><span class="muted">남은 960GB는 일부러 버린 쿼리 캐시</span></p></div>
+<div class="step in" style="--i:1"><p class="k">용도 확인</p><p class="v">700GB 디스크 = 옛 메타 DB<br><span class="muted">git 최초 커밋의 구성으로 확인</span></p></div>
+<div class="step in" style="--i:2"><p class="k">차단 테스트</p><p class="v">주말 동안 접속 차단<br><span class="muted">문의 0건</span></p></div>
+</div>
+</div>
+<div class="card hot in" style="--i:3; flex:0 0 520px">
+<p class="label">지운 것</p>
+<p class="txt">DB 1대 (1,200GB)<br>서버 2대 + 디스크 708GB<br>스냅샷 2장</p>
+<p class="num">−$250/월</p>
+<p class="label">청구서 기준</p>
+</div>
+</div>
+<aside>현재 쓰는 BI 도구는 영향 없음 확인. 옛 주소를 참조하던 코드 4곳은 호출 경로가 없는 코드라 함께 제거. 청구서: DB 저장공간 −$150, DB 인스턴스 −$18, 디스크 약 −$84.</aside>
+</section>
+
+<section id="case-lb" class="alt">
+<div class="head">
+<p class="eyebrow">사례 2 · 10/1</p>
+<h2>레거시 로드밸런서: 주인 없는 입구 4개</h2>
+</div>
+<div class="row">
+<div class="col">
+<div class="steps wide">
+<div class="step in" style="--i:0"><p class="k">관리 주체</p><p class="v">없어진 옛 클러스터 소유<br><span class="muted">지금 클러스터는 다시 만들지 않음</span></p></div>
+<div class="step in" style="--i:1"><p class="k">차단 테스트</p><p class="v">막고 2시간마다 8번 점검<br><span class="muted">요청·연결 0</span></p></div>
+<div class="step in" style="--i:2"><p class="k">남은 요청</p><p class="v">옛 배포 도구로 가는 웹훅<br><span class="muted">막기 전부터 이미 실패(504)</span></p></div>
+</div>
+</div>
+<div class="card hot in" style="--i:3; flex:0 0 520px">
+<p class="label">지운 것</p>
+<p class="txt">로드밸런서 4개<br>타깃그룹 121개<br>보안그룹 7개</p>
+<p class="num">−$85/월</p>
+<p class="label">시간 요금 + 공인 IP 6개</p>
+</div>
+</div>
+<aside>운영 입구를 CDN 경유로만 열어 두는 보안 점검 중 발견. 내부용 1개는 15개월 요청 0, 타깃그룹 57개가 비어 있어 바로 삭제. 설정은 전부 백업.</aside>
+</section>
+
+<section id="eks">
+<div class="head">
+<p class="eyebrow">사례 3 · 10/29</p>
+<h2>EKS: 오래된 버전에 붙던 추가 요금</h2>
+</div>
+<div class="row">
+<div class="col">
+<div class="steps">
+<div class="step in" style="--i:0"><p class="k">원인</p><p class="v">1.31 표준 지원 종료 → 연장 지원 요금<br><span class="muted">하루 약 $14 (표준은 약 $2.4)</span></p></div>
+<div class="step in" style="--i:1"><p class="k">결정</p><p class="v">1.36까지 하룻밤에 한 번에<br><span class="muted">11/26 강제 자동 업그레이드 전</span></p></div>
+<div class="step in" style="--i:2"><p class="k">확인</p><p class="v">10/29부터 연장 지원 요금 $0</p></div>
+</div>
+</div>
+<div class="card hot in" style="--i:3; flex:0 0 520px">
+<p class="label">바꾼 것</p>
+<p class="txt">버전 1.31 → 1.36<br>노드 그룹 교체<br>컨트롤러 6종 교체</p>
+<p class="num">−$360/월</p>
+<p class="label">8월 $446 → 11월 약 $72</p>
+</div>
+</div>
+<aside>작업: 10/29 02:00 시작, 06:12 완료. 노드는 새 노드 그룹으로 옮기는 방식(블루그린). 연장 지원 요금 10/28 하루 $9.16 → 10/29부터 $0 (11/8 Cost Explorer 확인). 11월 값은 11/1~19 실적을 30일로 환산.</aside>
+</section>
+
+<section id="kept">
+<div class="head">
+<p class="eyebrow">남긴 판단</p>
+<h2>지우지 않은 자원, 비용과 무관한 작업</h2>
+</div>
+<div class="row">
+<div class="card in" style="--i:0">
+<h3>보류한 자원</h3>
+<p class="txt">주인 없는 보안그룹 1개</p>
+<p class="txt muted">IaC 관리 표시가 있지만 코드 위치를 모름<br>→ 지우면 기록과 실제가 어긋남<br>보관 비용 0</p>
+</div>
+<div class="card in" style="--i:1">
+<h3>보안·유지보수 작업</h3>
+<p class="txt">옛 캐시 서버 → 서버리스 전환</p>
+<p class="txt">서버리스 함수 81개 → 12개</p>
+<p class="txt muted">비용은 거의 그대로</p>
+</div>
+</div>
+<aside>서버리스 캐시 11월 누적 약 $1. 서버리스 함수 요금 하루 $0.06 → $0.02. 삭제한 함수 28개 중 14개는 90일 실행 0, 10개는 운영 계정에 섞인 개발용.</aside>
+</section>
+
+<section id="issues" class="alt">
+<div class="head">
+<p class="eyebrow">실행 중 문제</p>
+<h2>예상과 달랐던 다섯 가지</h2>
+</div>
+<div class="steps">
+<div class="step in" style="--i:0"><p class="k">1</p><p class="v">옛 서버에 종료 방지가 걸려 있음 <span class="muted">— 11대 중 이 한 대만</span></p></div>
+<div class="step in" style="--i:1"><p class="k">2</p><p class="v">여러 대 종료 요청이 원자적이지 않음 <span class="muted">— 한 대 거부, 한 대는 종료</span></p></div>
+<div class="step in" style="--i:2"><p class="k">3</p><p class="v">DB 삭제 후 자동 스냅샷이 약 3분간 목록에 남음</p></div>
+<div class="step in" style="--i:3"><p class="k">4</p><p class="v">로드밸런서 보안그룹은 콘솔로 고치면 되돌아감 <span class="muted">— 쿠버네티스 설정으로만 변경</span></p></div>
+<div class="step in" style="--i:4"><p class="k">5</p><p class="v">DB 로그 급감 → 고장 의심 <span class="muted">— 원인은 9/30 상품 서버 개선</span></p></div>
+</div>
+<aside>1: 승인 받고 해제 후 종료. 3: 삭제 판정은 자동 백업 목록이 비었는지로. 4: 쿠버네티스 안의 컨트롤러가 보안그룹을 관리하므로 그쪽 설정으로 변경. 5: 상품 서버 배포 시각(9/30 15:08)과 로그가 꺾인 시각 일치. 매분 약 2,800건 행 전체 저장 → 바뀐 상태만 저장.</aside>
+</section>
+
+<section id="effect">
+<div class="head">
+<p class="eyebrow">비용 효과</p>
+<h2>무엇이 얼마나 줄였나 (월, 세금 제외)</h2>
+</div>
+<div class="bars">
+<div class="bar in" style="--i:0"><p class="name">EKS 연장 지원 요금 사라짐</p><div class="fill" style="width:864px"></div><p class="val">−$360</p></div>
+<div class="bar in" style="--i:1"><p class="name">옛 BI 도구 DB</p><div class="fill" style="width:403px"></div><p class="val">−$168</p></div>
+<div class="bar in" style="--i:2"><p class="name">상품 서버 DB 로그 감소</p><div class="fill" style="width:338px"></div><p class="val">−$141</p></div>
+<div class="bar in" style="--i:3"><p class="name">레거시 로드밸런서</p><div class="fill" style="width:204px"></div><p class="val">−$85</p></div>
+<div class="bar in" style="--i:4"><p class="name">디스크(EBS)</p><div class="fill" style="width:202px"></div><p class="val">−$84</p></div>
+</div>
+<p class="note">합계 −$838 · 8월과 11/2~18을 30일로 맞춰 비교 · AWS Cost Explorer 기준</p>
+<aside>합계 $838(세금 포함 약 $915). 디스크 감소는 대부분 옛 BI 도구 디스크 708GB로 보이나 볼륨별 확정은 미확인. 반대로 늘어난 것: 인터넷 송신 +$98, Lightsail +$42 (원인 미확인).</aside>
+</section>
+
+<section id="numbers" class="alt">
+<div class="head">
+<p class="eyebrow">숫자 바로잡기</p>
+<h2>추정과 청구서는 달랐다</h2>
+</div>
+<div class="row">
+<div class="card in" style="--i:0">
+<p class="label">옛 BI 도구 절감</p>
+<p class="num">$330 → $250</p>
+<p class="txt">스냅샷 $98은 8월엔 무료 한도 안<br>→ 줄인 게 아니라 생길 요금을 막은 것</p>
+</div>
+<div class="card in" style="--i:1">
+<p class="label">8월 대비 전체 감소</p>
+<p class="num">$1,000 → $900</p>
+<p class="txt">11월 예상에 세금을 덜 넣었던 값<br>→ 18일치 실적으로 다시 계산</p>
+</div>
+</div>
+<aside>DB 백업 요금: 8월 $0.2 → 9월 $34 → 10월 $5 → 11월 $0. DB를 지운 뒤 무료 한도가 줄어 스냅샷이 과금되기 시작했고, 스냅샷 삭제로 사라짐. 중간 집계는 월초에 찍힌 세금만 반영했음.</aside>
+</section>
+
+<section id="remain">
+<div class="head">
+<p class="eyebrow">남은 후보 · 11/20 조회</p>
+<h2>아직 남은 정리 후보, 월 약 $40</h2>
+</div>
+<table style="font-size:32px">
+<tr><th style="width:55%">자원</th><th style="width:20%">수량</th><th style="width:25%;text-align:right">월 요금</th></tr>
+<tr><td>연결 안 된 고정 IP</td><td>4개</td><td style="text-align:right">약 $15</td></tr>
+<tr><td>어디에도 안 붙은 디스크</td><td>7개 · 160GB</td><td style="text-align:right">약 $18</td></tr>
+<tr><td>멈춘 서버의 디스크</td><td>3대 · 28GB</td><td style="text-align:right">약 $3</td></tr>
+<tr><td>Lightsail 스냅샷</td><td>1개 · 80GB</td><td style="text-align:right">약 $4</td></tr>
+</table>
+<p class="note">원인 미확인 증가: 인터넷 송신 +$98 · Lightsail +$42</p>
+<aside>고정 IP 4개는 첫 작업 때 이미 발견했지만 그대로. 디스크 7개: 2022년 쿠버네티스 임시 볼륨 5개, 옛 개발 환경 디스크 100GB, 2024년 볼륨 1개. DB 수동 스냅샷은 현재 백업 요금 $0이라 비용 효과 없음.</aside>
+</section>
+
+<section id="closing" class="dark" style="justify-content:center">
+<p class="eyebrow">정리</p>
+<div class="steps">
+<div class="step in" style="--i:0"><p class="k">1</p><p class="quote">막고, 지켜보고, 지운다</p></div>
+<div class="step in" style="--i:1"><p class="k">2</p><p class="quote">절감은 추정이 아니라 청구서로 확인</p></div>
+<div class="step in" style="--i:2"><p class="k">3</p><p class="quote">줄어든 것과 함께 늘어난 것도 본다</p></div>
+</div>
+<aside>질문 받기.</aside>
+</section>
+
+</div>
+<div id="hud"><b id="cur">1</b> / <span id="tot"></span> · ← → 넘기기 · F 전체 화면 · N 발표자 메모</div>
+<script>
+const S=[...document.querySelectorAll('#stage > section')];
+const stage=document.getElementById('stage');
+let i=Math.max(0,Math.min(S.length-1,(parseInt(location.hash.slice(1))||1)-1));
+document.getElementById('tot').textContent=S.length;
+function fit(){const k=Math.min(innerWidth/1920,innerHeight/1080);stage.style.transform='scale('+k+') translate(-50%,-50%)';}
+function show(n){i=Math.max(0,Math.min(S.length-1,n));S.forEach((s,j)=>s.classList.toggle('active',j===i));document.getElementById('cur').textContent=i+1;history.replaceState(null,'','#'+(i+1));}
+addEventListener('resize',fit);
+addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();show(i+1);}
+  else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();show(i-1);}
+  else if(e.key==='Home')show(0); else if(e.key==='End')show(S.length-1);
+  else if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}
+  else if(e.key==='n'||e.key==='N')document.body.classList.toggle('notes');
+});
+addEventListener('click',e=>{ if(e.target.closest('#hud'))return; show(e.clientX<innerWidth/3?i-1:i+1); });
+fit();show(i);
+</script>
+</body></html>
